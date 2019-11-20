@@ -1,17 +1,11 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-
-
-def uniform_quantize(k):
+def uniform_quantize(k, W_flag=False):
   class qfn(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input):
       if k == 32:
         out = input
-      elif k == 1:
+      elif (k == 1) and (W_flag==True):
         out = torch.sign(input)
       else:
         n = float(2 ** k - 1)
@@ -31,14 +25,14 @@ class weight_quantize_fn(nn.Module):
     super(weight_quantize_fn, self).__init__()
     assert w_bit <= 8 or w_bit == 32
     self.w_bit = w_bit
-    self.uniform_q = uniform_quantize(k=w_bit)
+    self.uniform_q = uniform_quantize(k=w_bit, W_flag=True)
 
   def forward(self, x):
     if self.w_bit == 32:
       weight_q = x
     elif self.w_bit == 1:
       E = torch.mean(torch.abs(x)).detach()
-      weight_q = self.uniform_q(x / E) * E
+      weight_q = self.uniform_q(x/E) * E
     else:
       weight = torch.tanh(x)
       weight = weight / 2 / torch.max(torch.abs(weight)) + 0.5
@@ -56,6 +50,7 @@ class activation_quantize_fn(nn.Module):
   def forward(self, x):
     if self.a_bit == 32:
       activation_q = x
+
     else:
       activation_q = self.uniform_q(torch.clamp(x, 0, 1))
       # print(np.unique(activation_q.detach().numpy()))
